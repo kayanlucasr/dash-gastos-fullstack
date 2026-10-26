@@ -1,388 +1,162 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { useEffect, useRef, useState } from "react";
+import api, { errorMessage } from "../services/api";
 import ExpensesChart from "../components/ExpensesChart";
+import TransactionForm from "../components/TransactionForm";
+import WealthPanel from "../components/WealthPanel";
+import PlanningPanel from "../components/PlanningPanel";
+import MarketPanel from "../components/MarketPanel";
+import DataSettings from "../components/DataSettings";
+import { money, sumMoney, today, dateLabel } from "../services/format";
 import "../styles/Dashboard.css";
-
-function Dashboard() {
-  const navigate = useNavigate();
-
-  const [dashboard, setDashboard] = useState(null);
-  const [transactions, setTransactions] = useState([]);
-
-  const [descricao, setDescricao] = useState("");
-  const [valor, setValor] = useState("");
-  const [tipo, setTipo] = useState("expense");
-  const [categoryId, setCategoryId] = useState(1);
-
-  const [editandoId, setEditandoId] = useState(null);
-  const [filtroTipo, setFiltroTipo] = useState("");
-
+export default function Dashboard() {
+  const [area, setArea] = useState("Dashboard"),
+    [month, setMonth] = useState(today().slice(0, 7)),
+    [filter, setFilter] = useState(""),
+    [data, setData] = useState(null),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [feedback, setFeedback] = useState(""),
+    [revision, setRevision] = useState(0),
+    [editing, setEditing] = useState(null),
+    [busy, setBusy] = useState(false);
+  const pending = useRef(false);
   useEffect(() => {
-    carregarDados();
-  }, [filtroTipo]);
-
-  async function carregarDados() {
-    try {
-      const token = localStorage.getItem("token");
-
-      const dashboardResponse = await api.get("/dashboard", {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      const transactionsResponse = await api.get(
-        `/transactions${filtroTipo ? `?tipo=${filtroTipo}` : ""}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-      setDashboard(dashboardResponse.data);
-      setTransactions(transactionsResponse.data);
-
-    } catch (error) {
-      console.error(error);
-
-      if (error.response?.status === 401) {
-        localStorage.removeItem("token");
-        navigate("/");
+    const c = new AbortController();
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const [summary, statement, wealth, categories] = await Promise.all([api.get("/dashboard", {
+          params: {
+            month
+          },
+          signal: c.signal
+        }), api.get("/transactions", {
+          params: {
+            month
+          },
+          signal: c.signal
+        }), api.get("/finance/wealth", {
+          signal: c.signal
+        }), api.get("/finance/categories", {
+          signal: c.signal
+        })]);
+        if (!c.signal.aborted) setData({
+          summary: summary.data,
+          statement: statement.data,
+          wealth: wealth.data,
+          categories: categories.data
+        });
+      } catch (err) {
+        if (!c.signal.aborted) setError(errorMessage(err, "Não foi possível atualizar. Os valores anteriores podem estar desatualizados."));
+      } finally {
+        if (!c.signal.aborted) setLoading(false);
       }
     }
-  }
-
-  async function criarTransacao(e) {
-    e.preventDefault();
-
+    load();
+    return () => c.abort();
+  }, [month, revision]);
+  const reload = message => {
+    setFeedback(message);
+    setEditing(null);
+    setRevision(v => v + 1);
+  };
+  async function cancel(id) {
+    if (pending.current || !window.confirm("Cancelar esta movimentação? O registro será preservado para auditoria.")) return;
+    pending.current = true;
+    setBusy(true);
     try {
-      const token = localStorage.getItem("token");
-
-      if (editandoId) {
-        await api.put(
-          `/transactions/${editandoId}`,
-          {
-            descricao,
-            valor,
-            tipo,
-            category_id: categoryId
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
-      } else {
-        await api.post(
-          "/transactions",
-          {
-            descricao,
-            valor,
-            tipo,
-            category_id: categoryId
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
-      }
-
-      limparFormulario();
-      carregarDados();
-
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao salvar transação");
+      await api.delete(`/transactions/${id}`);
+      reload("Movimentação cancelada.");
+    } catch (err) {
+      setFeedback(errorMessage(err, "Não foi possível cancelar."));
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   }
+  const current = data?.summary;
+  const blocked = loading || busy || Boolean(error);
+  const totals = type => sumMoney((data?.wealth.accounts || []).filter(a => a.tipo === type).map(a => a.patrimonio));
+  const labels = {
+    income: "Receita",
+    expense: "Despesa",
+    transfer: "Transferência",
+    adjustment: "Ajuste patrimonial"
+  };
+  return <main className="dashboard-container">
+<header className="header">
+<h1>💰 Dashboard financeiro</h1>
 
-  function editarTransacao(transaction) {
-    setEditandoId(transaction.id);
-
-    setDescricao(transaction.descricao);
-    setValor(transaction.valor);
-    setTipo(transaction.tipo);
-
-    const categorias = {
-      "Alimentação": 1,
-      "Transporte": 2,
-      "Moradia": 3,
-      "Saúde": 4,
-      "Lazer": 5,
-      "Educação": 6
-    };
-
-    setCategoryId(
-      categorias[transaction.categoria] || 1
-    );
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth"
-    });
-  }
-
-  async function excluirTransacao(id) {
-    const confirmar = window.confirm(
-      "Deseja realmente excluir esta transação?"
-    );
-
-    if (!confirmar) return;
-
-    try {
-      const token = localStorage.getItem("token");
-
-      await api.delete(`/transactions/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      carregarDados();
-
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao excluir transação");
-    }
-  }
-
-  function limparFormulario() {
-    setDescricao("");
-    setValor("");
-    setTipo("expense");
-    setCategoryId(1);
-    setEditandoId(null);
-  }
-
-  function logout() {
-    localStorage.removeItem("token");
-    navigate("/");
-  }
-
-  return (
-    <div className="dashboard-container">
-
-      <div className="header">
-        <h1>💰 Dashboard de Gastos</h1>
-
-        <button
-          className="logout-btn"
-          onClick={logout}
-        >
-          Sair
-        </button>
-      </div>
-      <div className="header">
-        <h2>💻 By Kayan Lucas</h2>
-      </div>
-
-      {dashboard && (
-        <div className="cards">
-
-          <div className="card receitas">
-            <h3>💰 Receitas</h3>
-            <p>R$ {dashboard.receitas}</p>
-          </div>
-
-          <div className="card despesas">
-            <h3>💸 Despesas</h3>
-            <p>R$ {dashboard.despesas}</p>
-          </div>
-
-          <div className="card saldo">
-            <h3>📈 Saldo</h3>
-            <p>R$ {dashboard.saldo}</p>
-          </div>
-
-        </div>
-      )}
-
-      <div className="chart-container">
-        <ExpensesChart transactions={transactions} />
-      </div>
-
-      <div className="form-container">
-
-        <h2>
-          {editandoId
-            ? "Editar Transação"
-            : "Nova Transação"}
-        </h2>
-
-        <form onSubmit={criarTransacao}>
-
-          <input
-            type="text"
-            placeholder="Descrição"
-            value={descricao}
-            onChange={(e) =>
-              setDescricao(e.target.value)
+</header>
+<div className="header">
+<h2>💻 By Kayan Lucas</h2>
+</div>
+ <nav className="area-nav" aria-label="Áreas financeiras">{["Dashboard", "Extrato", "Patrimônio", "Mercado", "Planejamento", "Configurações"].map(name => <button key={name} aria-current={area === name ? "page" : undefined} onClick={() => setArea(name)}>{name}</button>)}</nav>
+ {!["Mercado", "Planejamento", "Configurações"].includes(area) && <>
+<div className="toolbar">
+<label>Mês de referência<input type="month" value={month} min="1900-01" max={today().slice(0, 7)} onChange={e => {
+            if (e.target.value) {
+              setMonth(e.target.value);
+              setEditing(null);
             }
-          />
-
-          <input
-            type="number"
-            placeholder="Valor"
-            value={valor}
-            onChange={(e) =>
-              setValor(e.target.value)
-            }
-          />
-
-          <select
-            value={tipo}
-            onChange={(e) =>
-              setTipo(e.target.value)
-            }
-          >
-            <option value="expense">
-              Despesa
-            </option>
-
-            <option value="income">
-              Receita
-            </option>
-          </select>
-
-          <select
-            value={categoryId}
-            onChange={(e) =>
-              setCategoryId(
-                Number(e.target.value)
-              )
-            }
-          >
-            <option value={1}>Alimentação</option>
-            <option value={2}>Transporte</option>
-            <option value={3}>Moradia</option>
-            <option value={4}>Saúde</option>
-            <option value={5}>Lazer</option>
-            <option value={6}>Educação</option>
-            <option value={7}>Outros</option>
-          </select>
-
-          <button type="submit">
-            {editandoId
-              ? "Atualizar Transação"
-              : "Salvar Transação"}
-          </button>
-
-          {editandoId && (
-            <button
-              type="button"
-              onClick={limparFormulario}
-              style={{ marginLeft: "10px" }}
-            >
-              Cancelar
-            </button>
-          )}
-
-        </form>
-
-      </div>
-
-      <h2>Transações</h2>
-
-      <div style={{ marginBottom: "20px" }}>
-        <select
-          value={filtroTipo}
-          onChange={(e) =>
-            setFiltroTipo(e.target.value)
-          }
-        >
-          <option value="">
-            Todas
-          </option>
-
-          <option value="income">
-            Receitas
-          </option>
-
-          <option value="expense">
-            Despesas
-          </option>
-        </select>
-      </div>
-
-      <div className="transactions">
-
-        {transactions.length === 0 ? (
-
-          <p>Nenhuma transação cadastrada.</p>
-
-        ) : (
-
-          transactions.map((transaction) => (
-
-            <div
-              key={transaction.id}
-              className="transaction-card"
-            >
-
-              <h3>
-                {transaction.descricao}
-              </h3>
-
-              <p>
-                <strong>Valor:</strong> R$ {transaction.valor}
-              </p>
-
-              <p>
-                <strong>Tipo:</strong>{" "}
-                {transaction.tipo === "income"
-                  ? "Receita"
-                  : "Despesa"}
-              </p>
-
-              <p>
-                <strong>Categoria:</strong>{" "}
-                {transaction.categoria}
-              </p>
-
-              <p>
-                <strong>Data:</strong>{" "}
-                {new Date(
-                  transaction.data
-                ).toLocaleDateString("pt-BR")}
-              </p>
-
-              <div className="transaction-actions">
-
-                <button
-                  className="edit-btn"
-                  onClick={() =>
-                    editarTransacao(transaction)
-                  }
-                >
-                  Editar
-                </button>
-
-                <button
-                  className="delete-btn"
-                  onClick={() =>
-                    excluirTransacao(transaction.id)
-                  }
-                >
-                  Excluir
-                </button>
-
-              </div>
-
-            </div>
-
-          ))
-
-        )}
-
-      </div>
-
-    </div>
-  );
+          }} />
+</label>
+<span>Indicadores mensais · saldos transportados entre meses</span>
+</div>{loading && <p role="status">Carregando…</p>}{error && <p role="alert">{error}<button onClick={() => setRevision(v => v + 1)}>Tentar novamente</button>
+</p>}{feedback && <p role="status">{feedback}</p>}</>}
+ {area === "Dashboard" && current && <>
+<div className="cards">{[["Receitas do mês", current.receitas, "receitas"], ["Despesas do mês", current.despesas, "despesas"], ["Disponível no fim do período", current.saldo, "saldo"], ["Reserva atual", totals("reserve"), "saldo"], ["Investimento atual", totals("investment"), "saldo"], ["Aportes do mês em investimentos", current.investimentos, "saldo"]].map(([title, value, style]) => <article key={title} className={`card ${style}`}>
+<h3>{title}</h3>
+<p>{money(value)}</p>
+</article>)}</div>
+<div className="chart-container">
+<h2>Despesas por categoria · {current.month}</h2>
+<ExpensesChart categories={current.categories} />
+</div>
+<section className="comparison">
+<h2>Comparação com {current.previous.month}</h2>
+<p>Receitas: {money(current.previous.receitas)} → {money(current.receitas)}</p>
+<p>Despesas: {money(current.previous.despesas)} → {money(current.despesas)}</p>
+<p className="hint">O mês atual pode estar incompleto; o período anterior representa o mês inteiro.</p>
+</section>
+</>}
+ {area === "Extrato" && data && <>
+<section className="comparison">
+<h2>Resumo · {current.month}</h2>
+<p>Saldo inicial {money(current.saldo_inicial)} · Entradas {money(current.receitas)} · Despesas {money(current.despesas)}</p>
+<p>Para reserva {money(current.reservas)} · Para investimentos {money(current.investimentos)} · Resgates {money(current.resgates)}</p>
+<p>Disponível ao final: {money(current.saldo)}</p>
+</section>
+ <TransactionForm key={editing?.id || revision} transaction={editing} accounts={data.wealth.accounts} categories={data.categories} disabled={blocked} onSaved={reload} onCancel={() => setEditing(null)} />
+ <div className="toolbar">
+<h2>Movimentações · {current.month}</h2>
+<label>Filtrar por natureza<select value={filter} onChange={e => setFilter(e.target.value)}>
+<option value="">Todas</option>{Object.entries(labels).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select>
+</label>
+</div>
+ <div className="transactions">{data.statement.filter(t => !filter || t.tipo === filter).map(t => <article key={t.id} className="transaction-card">
+<h3>{t.descricao}</h3>
+<p>{money(t.valor)} · {labels[t.tipo]}</p>
+<p>{dateLabel(t.data)} · {t.categoria || "Patrimônio"}</p>
+<p>{t.origem || "Entrada externa"} → {t.destino || "Saída externa"}</p>{!t.valuation_id && <div className="transaction-actions">
+{t.tipo !== "adjustment" && <button className="edit-btn" disabled={blocked} onClick={() => {
+              setEditing(t);
+              window.scrollTo({
+                top: 0,
+                behavior: "smooth"
+              });
+            }}>Editar</button>}
+<button className="delete-btn" disabled={blocked} onClick={() => cancel(t.id)}>Cancelar</button>
+</div>}</article>)}{!data.statement.some(t => !filter || t.tipo === filter) && <p>Nenhuma movimentação neste período e filtro.</p>}</div>
+ <section className="comparison">
+<h2>Fechamentos anteriores</h2>{current.closings.length ? <ul className="plain-list">{current.closings.map(c => <li key={c.month}>
+<button onClick={() => setMonth(c.month)}>{c.month}</button> · Entradas {money(c.summary.receitas)} · Despesas {money(c.summary.despesas)} · Disponível {money(c.summary.saldo)} · Revisão {c.revision}</li>)}</ul> : <p>Os fechamentos serão gerados quando houver meses anteriores com movimentações.</p>}</section>
+</>}
+ {area === "Patrimônio" && data && <WealthPanel wealth={data.wealth} disabled={blocked} onSaved={reload} />}
+ {area === "Mercado" && <MarketPanel />}
+ {area === "Planejamento" && <PlanningPanel />}
+ {area === "Configurações" && <DataSettings />}
+ {!data && !loading && !error && !["Mercado", "Planejamento", "Configurações"].includes(area) && <p>Nenhum dado disponível.</p>}
+ </main>;
 }
-
-export default Dashboard;

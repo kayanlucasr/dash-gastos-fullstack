@@ -1,23 +1,47 @@
 {
-  "name": "login-funcional",
+  "name": "financeiro",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Gestão financeira pessoal local para Windows",
+  "main": "desktop/main.cjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js",
+    "db:migrate": "node scripts/sqlite-maintenance.cjs",
+    "db:init": "node scripts/sqlite-maintenance.cjs",
+    "desktop:start": "electron .",
+    "desktop:dev": "electron . --desktop-dev",
+    "desktop:smoke": "npm run desktop:build && node scripts/desktop-smoke.cjs",
+    "desktop:build": "node scripts/clean-frontend.cjs && npm --prefix frontend run build",
+    "db:backup": "node scripts/sqlite-backup.cjs",
+    "desktop:asar-smoke": "npm run desktop:build && node scripts/desktop-asar-smoke.cjs",
+    "icons:generate": "powershell -NoProfile -File scripts/generate-icon.ps1",
+    "desktop:prepare": "npm run desktop:build && node scripts/desktop-prepare.cjs",
+    "desktop:package": "npm run desktop:prepare && electron-builder --config electron-builder.cjs --win --x64 --dir",
+    "desktop:installer": "npm run desktop:prepare && electron-builder --config electron-builder.cjs --win nsis --x64 --publish never",
+    "desktop:packaged-smoke": "node scripts/packaged-smoke.cjs",
+    "desktop:verify-package": "node scripts/verify-package.cjs",
+    "desktop:install-smoke": "powershell -NoProfile -File scripts/windows-install-smoke.ps1",
+    "desktop:validation-build": "npm run desktop:prepare && node scripts/build-validation-installers.cjs",
+    "desktop:upgrade-smoke": "powershell -NoProfile -File scripts/windows-upgrade-smoke.ps1",
+    "market:check-live": "node scripts/check-market-live.cjs"
   },
   "keywords": [],
-  "author": "",
+  "author": "Kayan Lucas",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "bcrypt": "^6.0.0",
     "chart.js": "^4.5.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "pg": "^8.20.0",
     "react-chartjs-2": "^5.3.1"
+  },
+  "devDependencies": {
+    "@electron/asar": "4.3.1",
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "engines": {
+    "node": ">=24.13.0"
   }
 }

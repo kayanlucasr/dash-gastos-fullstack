@@ -15,33 +15,23 @@ ChartJS.register(
 
 //MAPA DE CORES POR CATEGORIA
 const COLORS = {
-  Alimentacao: "#e8e421",
+  Alimentação: "#e8e421",
   Transporte: "#0d6efd",
   Moradia: "#6f42c1",
-  Saude: "#198754",
+  Saúde: "#198754",
   Lazer: "#fd7e14",
-  Educacao: "#20c997",
+  Educação: "#20c997",
   Outros: "#dc3545",
 };
 
-function ExpensesChart({ transactions }) {
-
-  const categorias = {};
-
-  transactions.forEach((t) => {
-    if (t.tipo === "expense") {
-      categorias[t.categoria] =
-        (categorias[t.categoria] || 0) + Number(t.valor);
-    }
-  });
-
-  const labels = Object.keys(categorias);
+function ExpensesChart({ categories }) {
+  const labels = categories.map((category) => category.categoria || "Sem categoria");
 
   const data = {
     labels,
     datasets: [
       {
-        data: Object.values(categorias),
+        data: categories.map((category) => Number(category.total)),
 
         // 🎨 AQUI ENTRA A COR POR CATEGORIA
         backgroundColor: labels.map(
@@ -53,7 +43,8 @@ function ExpensesChart({ transactions }) {
     ]
   };
 
-  return <Pie data={data} />;
+  if (!categories.length) return <p>Nenhuma despesa cadastrada.</p>;
+  return <Pie data={data} options={{ maintainAspectRatio: false }} aria-label="Despesas por categoria" />;
 }
 
 export default ExpensesChart;

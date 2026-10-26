@@ -1,223 +1,30 @@
-# 💰 Dash Gastos
+# Frontend — Financeiro
 
-Dashboard Financeiro Full Stack desenvolvido para controle de receitas e despesas.
+React, Vite e Chart.js. Configuração e regras completas no README da raiz.
 
-O projeto permite autenticação de usuários, gerenciamento de transações financeiras e visualização de indicadores através de dashboard e gráficos.
+- `npm run dev`: desenvolvimento.
+- `npm run lint`: análise estática.
+- `npm run build`: produção.
+- `npm run preview`: conferir build.
 
----
+Configure VITE_API_URL em .env conforme .env.example. Nunca coloque segredos em variáveis VITE_.
 
-## 🚀 Tecnologias Utilizadas
+Dashboard mostra indicadores mensais, saldo disponível ao fim do período e reservas/investimentos atuais. Extrato permite seleção mensal, edição, cancelamento e transferência entre contas. Patrimônio oferece contas, ajustes de saldo inicial e avaliações de investimento. Mercado mostra dados do backend com fonte, unidade, data e estados de indisponibilidade.
 
-### Frontend
+Os valores são strings decimais na API; a conversão numérica no frontend é para exibição e Chart.js. A composição dos saldos totais usa centavos inteiros (BigInt). Filtros do extrato não alteram a distribuição das despesas.
 
-- React
-- Vite
-- React Router DOM
-- Axios
-- Chart.js
-- React Chartjs 2
-- CSS3
+Acesso direto em `/` e `/dashboard`, sem tela de login, cadastro, token ou botão Sair. Vite e preview vinculam-se a 127.0.0.1. Não publique a API local por túneis ou proxies.
 
-### Backend
+No desktop, execute `npm run desktop:dev` na raiz ou `npm run desktop:build` seguido de `npm run desktop:start`. Electron inicia o backend automaticamente e abre o dashboard na própria janela. A proteção temporária da comunicação é gerenciada pelo processo principal, sem sessão de usuário ou credenciais no React.
 
-- Node.js
-- Express
-- JWT (JSON Web Token)
-- PostgreSQL
-- Bcrypt
-- Dotenv
+Fase 5: lint/build e smoke tests Electron estático/Vite/ASAR aprovados. O smoke verifica abertura direta, ausência de campos de senha e controles de login, navegação em Dashboard/Extrato/Patrimônio/Mercado/Planejamento, Chart.js e CRUD/persistência de Planejamento. Os testes usam perfis SQLite temporários; consulte o relatório no README da raiz.
 
-### Banco de Dados
+Persistência atual: SQLite no backend. Os contratos continuam usando strings decimais; a interface formata dinheiro sem somas de ponto flutuante. O renderer não acessa o arquivo SQLite. Consulte o README da raiz para caminhos separados de desenvolvimento, produção planejada e testes.
 
-- PostgreSQL
+Fase 6: **Configurações → Dados e backups** oferece criação de backup consistente, data do último backup e restauração pelo Electron. A seleção de arquivos e a confirmação são diálogos nativos; o React não recebe caminhos nem acesso genérico a arquivos/IPC. A restauração pausa os serviços, cria cópia de segurança, valida a substituição e recarrega a interface. No modo web os botões ficam indisponíveis, com orientação para abrir o desktop.
 
----
+Todas as finanças e gráficos locais funcionam sem internet. Mercado mostra cache com datas, erro e indicação de cotação antiga. Consulte o README da raiz para compatibilidade de backups, localização de logs e recuperação em caso de falha.
 
-## 📋 Funcionalidades
+Release final 1.0.0: Axios 1.20.0, React Router DOM 7.18.4 e Vite 8.3.5, com mínimos compatíveis e lockfile atualizado. A auditoria npm do frontend passou sem alertas reportados. O renderer também validou a seleção do mês limite 1900-01 e retorno ao mês atual. Guia consolidado em [README da raiz](../README.md) e resultados/ressalvas em [relatório da release](../docs/RELEASE_1.0.0.md).
 
-### Autenticação
-
-✅ Cadastro de usuários
-
-✅ Login
-
-✅ Geração de Token JWT
-
-✅ Rotas protegidas
-
----
-
-### Dashboard Financeiro
-
-✅ Total de receitas
-
-✅ Total de despesas
-
-✅ Saldo atualizado
-
-✅ Gráfico de despesas por categoria
-
----
-
-### Transações
-
-✅ Criar transações
-
-✅ Listar transações
-
-✅ Editar transações
-
-✅ Excluir transações
-
-✅ Categorizar receitas e despesas
-
-✅ Filtro por tipo (Receitas e Despesas)
-
----
-
-## 📸 Demonstração
-
-### Dashboard
-
-- Cards de Receitas
-- Cards de Despesas
-- Cards de Saldo
-- Gráfico de categorias
-- Lista de transações
-
----
-
-## 🗄 Estrutura do Projeto
-
-### Backend
-
-```bash
-backend/
-│
-├── controllers/
-├── middlewares/
-├── routes/
-├── db.js
-├── server.js
-└── .env
-```
-
-### Frontend
-
-```bash
-frontend/
-│
-├── src/
-│   ├── components/
-│   ├── pages/
-│   ├── services/
-│   ├── styles/
-│   └── App.jsx
-```
-
----
-
-## ⚙️ Instalação
-
-### Clonar projeto
-
-```bash
-git clone https://github.com/seuusuario/dash-gastos.git
-```
-
-### Backend
-
-```bash
-cd backend
-
-npm install
-
-npm run dev
-```
-
-### Frontend
-
-```bash
-cd frontend
-
-npm install
-
-npm run dev
-```
-
----
-
-## 🔑 Variáveis de Ambiente
-
-Crie um arquivo `.env`
-
-```env
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=sua_senha
-DB_NAME=dash_gastos
-
-JWT_SECRET=sua_chave_secreta
-```
-
----
-
-## 📊 Banco de Dados
-
-Tabelas principais:
-
-### users
-
-```sql
-id
-nome
-email
-senha
-```
-
-### categories
-
-```sql
-id
-nome
-```
-
-### transactions
-
-```sql
-id
-descricao
-valor
-tipo
-data
-user_id
-category_id
-```
-
----
-
-## 🎯 Objetivo do Projeto
-
-Projeto desenvolvido para prática de desenvolvimento Full Stack utilizando React, Node.js e PostgreSQL, aplicando conceitos de:
-
-- Autenticação JWT
-- CRUD Completo
-- API REST
-- Banco de Dados Relacional
-- Consumo de API
-- Componentização React
-- Controle de Estado
-- Gráficos e Dashboards
-
----
-
-## 👨‍💻 Autor
-
-Kayan Lucas
-
-Estudante de Análise e Desenvolvimento de Sistemas com foco em Desenvolvimento Full Stack.
-
-LinkedIn: https://www.linkedin.com
-
-GitHub: https://github.com
+Fase 7: o nome do programa Windows é **Financeiro**, com ícone de cifrão personalizado. Para gerar o instalador completo, use `npm run desktop:installer` na raiz. O build desktop limpa e compila a interface antes de empacotar; não exige Vite, Node.js ou terminal no computador do usuário final. A interface financeira e a pasta persistente DashGastosDesktop foram preservadas. Resultados e limitações da instalação estão no README da raiz.
